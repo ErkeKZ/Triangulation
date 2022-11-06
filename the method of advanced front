@@ -1,0 +1,509 @@
+# Construction of an unstructured mesh by triangulation (the method of advanced front) taking into account the elasticity of the boundary of the domain
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+# a function to check for the intersection of a triangle and an edge. If there are intersections, 1 is returned
+def ktek(x,y,xk,yk,xkk,ykk,xv,yv):
+ ks=0
+ n=len(x)
+ for i in range(1,n):
+#        checking when a triangle and an edge have a common vertex 
+         if (((x[i]==xk and y[i]==yk) and (x[i-1] not in [xkk,xv] or y[i-1] not in [ykk,yv])) or\
+         ((x[i-1]==xk and y[i-1]==yk) and (x[i] not in [xkk,xv] or y[i] not in [ykk,yv])) or\
+         ((x[i]==xkk and y[i]==ykk) and (x[i-1] not in [xk,xv] or y[i-1] not in [yk,yv])) or\
+         ((x[i-1]==xkk and y[i-1]==ykk) and (x[i] not in [xk,xv] or y[i] not in [yk,yv])) or\
+         ((x[i]==xv and y[i]==yv) and (x[i-1] not in [xk,xkk] or y[i-1] not in [yk,ykk])) or\
+         ((x[i-1]==xv and y[i-1]==yv) and (x[i] not in [xk,xkk] or y[i] not in [yk,ykk]))) and \
+         ((np.sign((xv-x[i-1])*(yk-y[i-1])-(xk-x[i-1])*(yv-y[i-1]))+\
+         np.sign((xv-x[i])*(yk-y[i])-(xk-x[i])*(yv-y[i])))!=-1 and \
+         (np.sign((xk-x[i-1])*(ykk-y[i-1])-(xkk-x[i-1])*(yk-y[i-1]))+\
+         np.sign((xk-x[i])*(ykk-y[i])-(xkk-x[i])*(yk-y[i])))!=-1 and \
+         (np.sign((xkk-x[i-1])*(yv-y[i-1])-(xv-x[i-1])*(ykk-y[i-1]))+\
+         np.sign((xkk-x[i])*(yv-y[i])-(xv-x[i])*(ykk-y[i])))!=-1):
+             ks=1
+#        checking when a triangle and an edge do not have a common vertex 
+         if ((x[i]!=xk or y[i]!=yk) and (x[i-1]!=xk or y[i-1]!=yk) and \
+         (x[i]!=xkk or y[i]!=ykk) and (x[i-1]!=xkk or y[i-1]!=ykk) and \
+         (x[i]!=xv or y[i]!=yv) and (x[i-1]!=xv or y[i-1]!=yv)) and \
+         (abs(np.sign((x[i-1]-xk)*(y[i]-yk)-(x[i]-xk)*(y[i-1]-yk))+\
+         np.sign((x[i-1]-xkk)*(y[i]-ykk)-(x[i]-xkk)*(y[i-1]-ykk))+\
+         np.sign((x[i-1]-xv)*(y[i]-yv)-(x[i]-xv)*(y[i-1]-yv)))!=3 and \
+         (np.sign((xv-x[i-1])*(yk-y[i-1])-(xk-x[i-1])*(yv-y[i-1]))+\
+         np.sign((xv-x[i])*(yk-y[i])-(xk-x[i])*(yv-y[i])))!=-2 and \
+         (np.sign((xk-x[i-1])*(ykk-y[i-1])-(xkk-x[i-1])*(yk-y[i-1]))+\
+         np.sign((xk-x[i])*(ykk-y[i])-(xkk-x[i])*(yk-y[i])))!=-2 and \
+         (np.sign((xkk-x[i-1])*(yv-y[i-1])-(xv-x[i-1])*(ykk-y[i-1]))+\
+         np.sign((xkk-x[i])*(yv-y[i])-(xv-x[i])*(ykk-y[i])))!=-2):
+             ks=1
+ return ks
+
+# triangulation function
+def triang(x,y,uzl,xb,yb,rt,xt,yt,xt_yt,ru,tu1,tu2,tu3,jl):
+ uzl=uzl+1
+ n=len(x)
+ xx=x.copy()
+ yy=y.copy()
+ dl=[]
+ x.append(x[0])
+ y.append(y[0])
+# calculating the edge lengths of a polygon and determining the minimum edge
+ for i in range(1,n+1):
+     dkv=(x[i]-x[i-1])**2+(y[i]-y[i-1])**2
+     dl.append(dkv**0.5)
+ dlm=min(dl)
+ k=dl.index(dlm)
+ gamma=10/9 # the ratio of the lateral edge of the triangle to the base
+ s=gamma*dlm # lateral edge length
+#  determining the coordinates of the vertex opposite to the base
+ xm=(x[k+1]+x[k])/2
+ ym=(y[k+1]+y[k])/2
+ ht=(s**2-(0.5*dlm)**2)**0.5
+ if y[k]==y[k+1]:
+    xv1=xm
+    xv2=xm
+    yv1=y[k]+ht
+    yv2=y[k]-ht
+ elif x[k]==x[k+1]:
+    xv1=x[k]+ht
+    xv2=x[k]-ht
+    yv1=ym
+    yv2=ym    
+ else:    
+    c=ht*(y[k+1]-y[k])/dlm
+    xv1=xm+c
+    xv2=xm-c
+    yv1=ym-c*(x[k+1]-x[k])/(y[k+1]-y[k])
+    yv2=ym+c*(x[k+1]-x[k])/(y[k+1]-y[k])
+ if ((x[k]-xv1)*(y[k+1]-yv1)-(x[k+1]-xv1)*(y[k]-yv1))>0:
+  xv=xv1
+  yv=yv1
+ if ((x[k]-xv2)*(y[k+1]-yv2)-(x[k+1]-xv2)*(y[k]-yv2))>0:
+  xv=xv2
+  yv=yv2
+# finding the vertices of a polygon lying close to the vertex of a triangle
+ h=ht/2
+ inloc=[]
+ hm=[]
+ iloc=0
+ akt=[]
+ for i in range(n):
+     rs=((xv-x[i])**2+(yv-y[i])**2)**0.5
+     if rs<=h:
+         iloc=iloc+1
+         inloc.append(i)
+         hm.append(rs)
+     akt.append(rs)
+# if there is a nearby vertex of the polygon, replacing the vertex of the triangle with this vertex of the polygon
+ if iloc!=0:
+    hmin=min(hm)
+    xv=x[inloc[hm.index(hmin)]]
+    yv=y[inloc[hm.index(hmin)]]
+# if the triangle intersects the polygon, the vertex of the triangle is replaced by the nearby vertex of the polygon.
+# if this triangle also intersects the polygon, the next nearby vertex of the polygon is checked 
+ if ktek(x,y,x[k],y[k],x[k+1],y[k+1],xv,yv)==1: 
+    aktk=akt.copy()
+    akt.sort()
+    akti=0
+    ka=0
+    while True:
+       if ktek(x,y,x[k],y[k],x[k+1],y[k+1],x[aktk.index(akt[akti],aktk.index(akt[akti])+ka)],\
+               y[aktk.index(akt[akti],aktk.index(akt[akti])+ka)])==0:
+           if (x[k]==x[aktk.index(akt[akti],aktk.index(akt[akti])+ka)] and y[k]==y[aktk.index(akt[akti],aktk.index(akt[akti])+ka)]) or \
+           (x[k+1]==x[aktk.index(akt[akti],aktk.index(akt[akti])+ka)] and y[k+1]==y[aktk.index(akt[akti],aktk.index(akt[akti])+ka)]) or \
+           ((x[k]-x[aktk.index(akt[akti],aktk.index(akt[akti])+ka)])*(y[k+1]-y[aktk.index(akt[akti],aktk.index(akt[akti])+ka)])-\
+                   (x[k+1]-x[aktk.index(akt[akti],aktk.index(akt[akti])+ka)])*(y[k]-y[aktk.index(akt[akti],aktk.index(akt[akti])+ka)]))<=0:
+               akti=akti+1
+               continue
+           else:
+               xv=x[aktk.index(akt[akti],aktk.index(akt[akti])+ka)]
+               yv=y[aktk.index(akt[akti],aktk.index(akt[akti])+ka)]
+               break
+           if akti>0 and akt[akti]!=akt[akti-1]:
+               ka=0
+           elif aktk.count(akt[akti])>1:
+               ka=ka+1
+           else:
+               ka=0
+       else:
+           akti=akti+1
+           if akti>0 and akt[akti]!=akt[akti-1]:
+               ka=0
+           elif aktk.count(akt[akti])>1:
+               ka=ka+1
+           else:
+               ka=0
+# updating a polygon with a new vertex
+ x.insert(k+1,xv)
+ y.insert(k+1,yv)
+# recording a new vertex as a new node 
+ if (xv not in xt) or (yv not in yt) or (str(xv)+'_'+str(yv)) not in xt_yt:
+       rt.append(len(rt)+1)
+       xt.append(xv)
+       yt.append(yv)
+       xt_yt.append(str(xv)+'_'+str(yv))
+# mesh refinement, if necessary, and recording triangle information
+ if jl==1 and ((x[k]>=min(xb) and x[k]<=max(xb) and y[k]>=min(yb) and y[k]<=max(yb)) or \
+        (x[k+1]>=min(xb) and x[k+1]<=max(xb) and y[k+1]>=min(yb) and y[k+1]<=max(yb)) or \
+        (x[k+2]>=min(xb) and x[k+2]<=max(xb) and y[k+2]>=min(yb) and y[k+2]<=max(yb))):
+         kx=(x[k]+x[k+1]+x[k+2])/3
+         ky=(y[k]+y[k+1]+y[k+2])/3
+         rt.append(len(rt)+1)
+         xt.append(kx)
+         yt.append(ky)
+         xt_yt.append(str(kx)+'_'+str(ky))
+         ru.append(len(ru)+1)
+         tu1.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+         tu2.append(rt[xt_yt.index(str(x[k+1])+'_'+str(y[k+1]))])
+         tu3.append(rt[xt_yt.index(str(x[k+2])+'_'+str(y[k+2]))])
+         ru.append(len(ru)+1)
+         tu1.append(rt[xt_yt.index(str(x[k])+'_'+str(y[k]))])
+         tu2.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+         tu3.append(rt[xt_yt.index(str(x[k+2])+'_'+str(y[k+2]))])
+         ru.append(len(ru)+1)
+         tu1.append(rt[xt_yt.index(str(x[k])+'_'+str(y[k]))])
+         tu2.append(rt[xt_yt.index(str(x[k+1])+'_'+str(y[k+1]))])
+         tu3.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+ else:
+         ru.append(len(ru)+1)
+         tu1.append(rt[xt_yt.index(str(x[k])+'_'+str(y[k]))])
+         tu2.append(rt[xt_yt.index(str(x[k+1])+'_'+str(y[k+1]))])
+         tu3.append(rt[xt_yt.index(str(x[k+2])+'_'+str(y[k+2]))])
+ del x[n+1]
+ del y[n+1]
+ 
+# removing parts of a polygon in the form of triangles that are not subject to triangulation
+ for kt in range(2): 
+  i2=[]
+  for i in range(3,len(x)):
+       if (x[i]==x[i-3] and y[i]==y[i-3]) and (x[i]!=x[i-1] or y[i]!=y[i-1]) and (x[i]!=x[i-2] or y[i]!=y[i-2]):
+         i2.append(i)
+  ijj=0
+  for j in i2:
+    j=j-ijj
+    if jl==1 and ((x[j-1]>=min(xb) and x[j-1]<=max(xb) and y[j-1]>=min(yb) and y[j-1]<=max(yb)) or \
+    (x[j-2]>=min(xb) and x[j-2]<=max(xb) and y[j-2]>=min(yb) and y[j-2]<=max(yb)) or \
+    (x[j-3]>=min(xb) and x[j-3]<=max(xb) and y[j-3]>=min(yb) and y[j-3]<=max(yb))):
+     kx=(x[j-1]+x[j-2]+x[j-3])/3
+     ky=(y[j-1]+y[j-2]+y[j-3])/3
+     rt.append(len(rt)+1)
+     xt.append(kx)
+     yt.append(ky)
+     xt_yt.append(str(kx)+'_'+str(ky))
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     tu2.append(rt[xt_yt.index(str(x[j-2])+'_'+str(y[j-2]))])
+     tu3.append(rt[xt_yt.index(str(x[j-3])+'_'+str(y[j-3]))])
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[j-1])+'_'+str(y[j-1]))])
+     tu2.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     tu3.append(rt[xt_yt.index(str(x[j-3])+'_'+str(y[j-3]))])
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[j-1])+'_'+str(y[j-1]))])
+     tu2.append(rt[xt_yt.index(str(x[j-2])+'_'+str(y[j-2]))])
+     tu3.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     del x[j]
+     del y[j]
+     del x[j-1]
+     del y[j-1]
+     del x[j-2]
+     del y[j-2]
+     ijj=ijj+3
+     if len(x)<3:
+            return  
+    else:
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[j-1])+'_'+str(y[j-1]))])
+     tu2.append(rt[xt_yt.index(str(x[j-2])+'_'+str(y[j-2]))])
+     tu3.append(rt[xt_yt.index(str(x[j-3])+'_'+str(y[j-3]))])
+     del x[j]
+     del y[j]
+     del x[j-1]
+     del y[j-1]
+     del x[j-2]
+     del y[j-2]
+     ijj=ijj+3
+     if len(x)<3:
+            return   
+  if (x[1]==x[len(x)-2] and y[1]==y[len(x)-2]) and (x[0]!=x[len(x)-1] or y[0]!=y[len(x)-1]):
+    if jl==1 and ((x[0]>=min(xb) and x[0]<=max(xb) and y[0]>=min(yb) and y[0]<=max(yb)) or \
+    (x[len(x)-1]>=min(xb) and x[len(x)-1]<=max(xb) and y[len(x)-1]>=min(yb) and y[len(x)-1]<=max(yb)) or \
+    (x[len(x)-2]>=min(xb) and x[len(x)-2]<=max(xb) and y[len(x)-2]>=min(yb) and y[len(x)-2]<=max(yb))):
+     kx=(x[0]+x[len(x)-1]+x[len(x)-2])/3
+     ky=(y[0]+y[len(x)-1]+y[len(x)-2])/3
+     rt.append(len(rt)+1)
+     xt.append(kx)
+     yt.append(ky)
+     xt_yt.append(str(kx)+'_'+str(ky))
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     tu2.append(rt[xt_yt.index(str(x[len(x)-1])+'_'+str(y[len(x)-1]))])
+     tu3.append(rt[xt_yt.index(str(x[len(x)-2])+'_'+str(y[len(x)-2]))])
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[0])+'_'+str(y[0]))])
+     tu2.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     tu3.append(rt[xt_yt.index(str(x[len(x)-2])+'_'+str(y[len(x)-2]))])
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[0])+'_'+str(y[0]))])
+     tu2.append(rt[xt_yt.index(str(x[len(x)-1])+'_'+str(y[len(x)-1]))])
+     tu3.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     del x[0]
+     del y[0]
+     del x[len(x)-1]
+     del y[len(y)-1]
+     del x[len(x)-2]
+     del y[len(y)-2]
+     if len(x)<3:
+            return  
+    else:
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[0])+'_'+str(y[0]))])
+     tu2.append(rt[xt_yt.index(str(x[len(x)-2])+'_'+str(y[len(x)-2]))])
+     tu3.append(rt[xt_yt.index(str(x[len(x)-1])+'_'+str(y[len(x)-1]))])
+     del x[0]
+     del y[0]
+     del x[len(x)-1]
+     del y[len(y)-1]
+     del x[len(x)-1]
+     del y[len(y)-1]
+     if len(x)<3:
+            return
+  if (x[2]==x[len(x)-1] and y[2]==y[len(x)-1]) and (x[0]!=x[len(x)-2] or y[0]!=y[len(x)-2]) and (x[1]!=x[len(x)-2] or y[1]!=y[len(x)-2]):
+    if jl==1 and ((x[0]>=min(xb) and x[0]<=max(xb) and y[0]>=min(yb) and y[0]<=max(yb)) or \
+    (x[1]>=min(xb) and x[1]<=max(xb) and y[1]>=min(yb) and y[1]<=max(yb)) or \
+    (x[2]>=min(xb) and x[len(x)-2]<=max(xb) and y[2]>=min(yb) and y[2]<=max(yb))):
+     kx=(x[0]+x[1]+x[2])/3
+     ky=(y[0]+y[1]+y[2])/3
+     rt.append(len(rt)+1)
+     xt.append(kx)
+     yt.append(ky)
+     xt_yt.append(str(kx)+'_'+str(ky))
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     tu2.append(rt[xt_yt.index(str(x[1])+'_'+str(y[1]))])
+     tu3.append(rt[xt_yt.index(str(x[2])+'_'+str(y[2]))])
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[0])+'_'+str(y[0]))])
+     tu2.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     tu3.append(rt[xt_yt.index(str(x[2])+'_'+str(y[2]))])
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[0])+'_'+str(y[0]))])
+     tu2.append(rt[xt_yt.index(str(x[1])+'_'+str(y[1]))])
+     tu3.append(rt[xt_yt.index(str(kx)+'_'+str(ky))])
+     del x[0]
+     del y[0]
+     del x[0]
+     del y[0]
+     del x[0]
+     del y[0]
+     if len(x)<3:
+            return  
+    else:
+     ru.append(len(ru)+1)
+     tu1.append(rt[xt_yt.index(str(x[0])+'_'+str(y[0]))])
+     tu2.append(rt[xt_yt.index(str(x[1])+'_'+str(y[1]))])
+     tu3.append(rt[xt_yt.index(str(x[2])+'_'+str(y[2]))])
+     del x[0]
+     del y[0]
+     del x[0]
+     del y[0]
+     del x[0]
+     del y[0]
+     if len(x)<3:
+            return
+# if the residual polygon has such a shape that two polygons are separated by two identical edges lying on the same line 
+# and these edges have the minimum length among all edges of the polygon, then the polygon is divided into two
+  x_y=[]
+  dl1=[]
+  for i in range(len(x)):
+        x_y.append(str(x[i])+'_'+str(y[i]))
+        if i>0:
+          dkv1=(x[i]-x[i-1])**2+(y[i]-y[i-1])**2
+          dl1.append(dkv1**0.5)
+  dkv1=(x[len(x)-1]-x[0])**2+(y[len(y)-1]-y[0])**2
+  dl1.append(dkv1**0.5)
+  dlm1=min(dl1)
+  k1=dl1.index(dlm1)
+  for i in range(1,len(x_y)):
+        if x_y.count(x_y[i])>1 and x_y.count(x_y[i-1])>1 and k1==(i-1):
+          xm=x.copy()
+          ym=y.copy()
+          xm.reverse()
+          ym.reverse()
+          xm_ym=[]
+          for j in range(len(xm)):
+                 xm_ym.append(str(xm[j])+'_'+str(ym[j]))
+          if abs(xm_ym.index(x_y[i-1])-xm_ym.index(x_y[i]))==1:
+             triang(x[x_y.index(x_y[i]):(-xm_ym.index(x_y[i])-1)],y[x_y.index(x_y[i]):(-xm_ym.index(x_y[i])-1)],uzl,xb,yb,rt,xt,yt,xt_yt,ru,tu1,tu2,tu3,jl)
+             del x[x_y.index(x_y[i]):(-xm_ym.index(x_y[i])-1)]
+             del y[x_y.index(x_y[i]):(-xm_ym.index(x_y[i])-1)]
+             if len(x)<3:
+                 return
+# removing parts of a polygon in the form of a line that are not subject to triangulation
+  if x[1]==x[len(x)-1] and y[1]==y[len(x)-1]:
+     del x[0]
+     del y[0]
+     del x[len(x)-1]
+     del y[len(y)-1]
+     if len(x)<3:
+            return
+  for kk in range(len(x)):
+   ik=[]
+   for i in range(2,len(x)):
+     if x[i]==x[i-2] and y[i]==y[i-2]:
+         ik.append(i)
+   ij=0
+   for j in ik:
+     del x[j-ij]
+     del y[j-ij]
+     del x[j-1-ij]
+     del y[j-1-ij]
+     if len(x)<3:
+            return
+     ij=ij+2
+# intermediate visualization
+#  for i in range(len(ru)):
+#     xx=[xt[rt.index(tu1[i])],xt[rt.index(tu2[i])],xt[rt.index(tu3[i])],xt[rt.index(tu1[i])]]
+#     yy=[yt[rt.index(tu1[i])],yt[rt.index(tu2[i])],yt[rt.index(tu3[i])],yt[rt.index(tu1[i])]]
+#     plt.plot(xx,yy,c='r')
+#  plt.plot(x,y,c='brown')
+#  plt.show()
+ if len(x)>3:
+     triang(x,y,uzl,xb,yb,rt,xt,yt,xt_yt,ru,tu1,tu2,tu3,jl)
+
+# coordinates of the polygon in which to construct the mesh
+# x=[3,4,5,17,6.5,4.75,3]
+# y=[1,2,2,1,15,8.5,10]
+# x=[1,4,8,12,15,17,15.5,13,10,4]
+# y=[5,3.5,2,2.1,3,5,8,9,10,8.5]
+# x=[1,4,8,12,15,17,15.5,13,10,4]
+# y=[10,4.5,3,3.1,4,6,9,10,15,13.5]
+# x=[1,2,8,12,17,21,17.5,13,10,4]
+# y=[10,2.5,1,1.1,2,6,9,13,15,13.5]
+# x=[9,9,8,6,4,2,1,1,2,4,6,8]
+# y=[4,6,8,9,9,8,6,4,2,1,1,2]
+# x=[9,9,9,6,4,1,1,1,1,4,6,9]
+# y=[4,6,9,9,9,9,6,4,1,1,1,1]
+x=[9,9,6,6,4,3,1,1,5,4,6,7]
+y=[4,6,6,9,9,7,6,4,5,1,1,5]
+# coordinates of the subdomain of the polygon
+# where the mesh needs to be refined (if the mesh needs to be refined, then jl=1) 
+# THE REVIEWER WHO READ THE ARTICLE ON THIS TRIANGULATION NOTED THAT THE MESH REFINEMENT METHOD SPECIFIED IN THE CODE MAY NOT INCREASE THE ACCURACY OF CALCULATIONS, BUT RATHER REDUCE
+jl=0
+# xb=[7.5,9,11.5,13.5,12.5,9]
+# yb=[5.5,3.5,3,4.5,7,6.5]
+xb=[7.5,9,11.5,17.5,12.5,9]
+yb=[7.5,5.5,5,6.5,9,8.5]
+xt=x.copy()
+yt=y.copy()
+rt=[]
+xt_yt=[]
+for i in range(1,len(xt)+1):
+ rt.append(i)
+for i in range(len(xt)):
+ xt_yt.append(str(xt[i])+'_'+str(yt[i]))
+# coordinates of a partially enlarged polygon,
+# in the presence of elasticity of the boundaries of the region (in the presence of elasticity ik=1)
+ik=0
+# xk=[9,9,9,8,6,4,2,1,1,2,4,6,8]
+# yk=[4,6,8,9,9,9,8,6,4,2,1,1,2]
+# xk=[9,9,8,6,4,2,1,1,2,4,6,8,9]
+# yk=[4,6,8,9,9,8,6,4,2,1,1,1,2]
+# xk=[10,10,8,6,4,2,1,1,2,4,6,8]
+# yk=[4,6,8,9,9,8,6,4,2,1,1,2]
+# xk=[10,10,8,6,4,2,1,1,2,4,6,8,9]
+# yk=[4,6,8,9,9,8,6,4,2,1,1,1,2]
+xk=[10,10,8,6,4,2,1,1,2,4,6,8,9]
+yk=[4,6,8,9,9,8,6,4,2,1,0.5,1,2]
+# xk=[10,10,8,6,4,2,1,1,1,2,4,6,8,9]
+# yk=[4,6,8,9,9,9,8,6,4,2,1,0.5,1,2]
+# "cutting off" the enlarged part of the polygon
+if ik==1:
+ xk_yk=[]
+ for i in range(len(xk)):
+  xk_yk.append(str(xk[i])+'_'+str(yk[i]))
+ xkk=[]
+ ykk=[]
+ ikk=[]
+ for i in range(len(xk_yk)):
+     if xk_yk[i] not in xt_yt:
+         ikk.append(i)
+ for i in range(len(xk_yk)):
+     if xk_yk[i] not in xt_yt:
+        xkk.append(xk[i])
+        ykk.append(yk[i])
+     if i!=0 and (xk_yk[i-1] not in xt_yt) and (xk_yk[i] in xt_yt) and (ikk[0]==0) and (ikk[len(ikk)-1]==len(xk)-1):
+        xkk.append(xk[i])
+        ykk.append(yk[i])
+        for j in range(xt_yt.index(xk_yk[i]),-1,-1):
+           if xt_yt[j] not in xk_yk:
+              xkk.append(xt[j])
+              ykk.append(yt[j])
+        for j in range(len(xt_yt)-1,xt_yt.index(xk_yk[i]),-1):
+           if xt_yt[j] not in xk_yk:
+              xkk.append(xt[j])
+              ykk.append(yt[j])
+              if xt_yt[j-1] in xk_yk:
+                 xkk.append(xt[j-1])
+                 ykk.append(yt[j-1])
+ if ikk[0]!=0 and ikk[len(ikk)-1]!=len(xk)-1:
+        xkk.insert(0,xk[ikk[0]-1])
+        ykk.insert(0,yk[ikk[0]-1])
+        xkk.append(xk[ikk[len(ikk)-1]+1])
+        ykk.append(yk[ikk[len(ikk)-1]+1])
+        for i in range(len(xt_yt)-1,-1,-1):
+           if xt_yt[i] not in xk_yk:
+             xkk.append(xt[i])
+             ykk.append(yt[i])
+ elif ikk[0]!=0:
+        xkk.insert(0,xk[ikk[0]-1])
+        ykk.insert(0,yk[ikk[0]-1])
+        xkk.append(xk[0])
+        ykk.append(yk[0])
+        for i in range(len(xt_yt)-1,-1,-1):
+           if xt_yt[i] not in xk_yk:
+             xkk.append(xt[i])
+             ykk.append(yt[i])
+ elif ikk[len(ikk)-1]!=len(xk)-1:
+        xkk.insert(0,xk[len(xk)-1])
+        ykk.insert(0,yk[len(xk)-1])
+        xkk.append(xk[ikk[len(ikk)-1]+1])
+        ykk.append(yk[ikk[len(ikk)-1]+1])
+        for i in range(len(xt_yt)-1,-1,-1):
+           if xt_yt[i] not in xk_yk:
+             xkk.append(xt[i])
+             ykk.append(yt[i])
+# triangulation
+ru=[]
+tu1=[]
+tu2=[]
+tu3=[]
+triang(x,y,0,xb,yb,rt,xt,yt,xt_yt,ru,tu1,tu2,tu3,jl)
+if ik==1:
+    for i in range(len(xkk)):
+         rt.append(len(rt)+1)
+         xt.append(xkk[i])
+         yt.append(ykk[i])
+         xt_yt.append(str(xkk[i])+'_'+str(ykk[i]))
+    triang(xkk,ykk,0,xb,yb,rt,xt,yt,xt_yt,ru,tu1,tu2,tu3,jl)
+# writing to files of different formats
+file=open('C:/Users/almag/Еркежан/tuinder.dat','w') 
+for i in range(len(rt)):
+     file.write(str(rt[i])+', '+str(xt[i])+', '+str(yt[i])+'\n')
+file.close()
+file=open('C:/Users/almag/Еркежан/ushb.dat','w') 
+for i in range(len(ru)):
+     file.write(str(ru[i])+', '+str(tu1[i])+', '+str(tu2[i])+', '+str(tu3[i])+'\n')
+file.close()
+tuinder=pd.DataFrame({'реті':rt,'x':xt,'y':yt})
+tuinder.to_excel('C:/Users/almag/Еркежан/tuinder.xlsx')
+ushb=pd.DataFrame({'реті':ru,'1':tu1,'2':tu2,'3':tu3})
+ushb.to_excel('C:/Users/almag/Еркежан/ushb.xlsx')
+# visualization
+for i in range(len(ru)):
+    xx=[xt[rt.index(tu1[i])],xt[rt.index(tu2[i])],xt[rt.index(tu3[i])],xt[rt.index(tu1[i])]]
+    yy=[yt[rt.index(tu1[i])],yt[rt.index(tu2[i])],yt[rt.index(tu3[i])],yt[rt.index(tu1[i])]]
+    plt.plot(xx,yy,c='r',linewidth=1)
+plt.axis('scaled')
+plt.xlabel('x',fontdict={'family':'Arial','size':11})
+plt.ylabel('y',fontdict={'family':'Arial','size':11})
+plt.show()
